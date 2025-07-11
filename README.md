@@ -1,11 +1,13 @@
-# react-native-tcp-socket <!-- omit in toc -->
+# react-native-tcp-socket with Polling Support <!-- omit in toc -->
 <p align="center">
   <img src="https://github.com/Rapsssito/react-native-tcp-socket/workflows/tests/badge.svg" />
   <img src="https://img.shields.io/npm/dw/react-native-tcp-socket" />
   <img src="https://img.shields.io/npm/v/react-native-tcp-socket?color=gr&label=npm%20version" />
 <p/>
 
-React Native TCP socket API for Android, iOS & macOS with **SSL/TLS support**. It allows you to create TCP client and server sockets, imitating Node's [net](https://nodejs.org/api/net.html) and Node's [tls](https://nodejs.org/api/tls.html) API functionalities (check the available [API](#api) for more information).
+**Fork of [react-native-tcp-socket](https://github.com/Rapsssito/react-native-tcp-socket) with native polling write functionality.**
+
+React Native TCP socket API for Android, iOS & macOS with **SSL/TLS support** and **native polling writes**. It allows you to create TCP client and server sockets, imitating Node's [net](https://nodejs.org/api/net.html) and Node's [tls](https://nodejs.org/api/tls.html) API functionalities, plus additional polling functionality to prevent JavaScript thread blocking (check the available [API](#api) for more information).
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -21,6 +23,8 @@ React Native TCP socket API for Android, iOS & macOS with **SSL/TLS support**. I
   - [Server example](#server-example)
   - [TLS Client example](#tls-client-example)
   - [TLS Server example](#tls-server-example)
+  - [Polling Write example](#polling-write-example)
+- [Polling Write Functionality](#polling-write-functionality)
 - [API](#api)
   - [net](#net)
     - [Socket](#socket)
@@ -310,6 +314,49 @@ server.on('close', () => {
 
 _Note: In order to use self-signed certificates make sure to [update your metro.config.js configuration](#self-signed-ssl-only-available-for-react-native--060)._
 
+### Polling Write example
+```javascript
+const client = TcpSocket.createConnection(options, async () => {
+  // Start polling write - send heartbeat every 1000ms (1 second)
+  try {
+    const intervalId = await client.startPollingWrite(1000, 'ping\n', 'utf8');
+    console.log(`Started polling write with interval ID: ${intervalId}`);
+    
+    // Stop polling after 5 seconds
+    setTimeout(async () => {
+      console.log('Stopping polling write...');
+      const stopped = await client.stopPollingWrite(intervalId);
+      console.log(`Polling write stopped: ${stopped}`);
+      client.destroy();
+    }, 5000);
+    
+  } catch (error) {
+    console.error('Error with polling write:', error);
+  }
+});
+```
+
+## Polling Write Functionality
+
+This fork adds native polling write functionality that allows you to repeatedly send data at specified intervals without blocking the JavaScript thread. The polling logic runs entirely in native code (iOS/Android) for optimal performance.
+
+**Key Features:**
+- **Native Performance**: All polling logic runs in native code to prevent JS thread freezes
+- **Cross-Platform**: Works identically on both iOS and Android  
+- **Memory Safe**: Automatic cleanup when sockets are destroyed
+- **Unique IDs**: Each polling operation gets a unique identifier for precise control
+- **Promise-based**: Modern async/await compatible API
+
+**Use Cases:**
+- Heartbeat/keepalive messages
+- Periodic status updates
+- Real-time data streaming
+- Connection monitoring
+
+**New Methods:**
+- `startPollingWrite(interval, data[, encoding][, callback])` - Start polling write operation
+- `stopPollingWrite(intervalId[, callback])` - Stop specific polling operation
+
 ## API
 ### net
 Here are listed all methods implemented in `react-native-tcp-socket` that imitate Node's [net](https://nodejs.org/api/net.html) API, their functionalities are equivalent to those provided by Node's [net](https://nodejs.org/api/net.html) (more info on [#41](https://github.com/Rapsssito/react-native-tcp-socket/issues/41)). However, the **methods whose interface differs from Node are marked in bold**.
@@ -331,6 +378,8 @@ Here are listed all methods implemented in `react-native-tcp-socket` that imitat
   * [`setNoDelay([noDelay])`](https://nodejs.org/api/net.html#net_socket_setnodelay_nodelay)
   * [`setTimeout(timeout[, callback])`](https://nodejs.org/api/net.html#net_socket_settimeout_timeout_callback)
   * [`write(data[, encoding][, callback])`](https://nodejs.org/api/net.html#net_socket_write_data_encoding_callback)
+  * **[`startPollingWrite(interval, data[, encoding][, callback])`](#socketstartpollingwrite----omit-in-toc)** - _Native polling write_
+  * **[`stopPollingWrite(intervalId[, callback])`](#socketstoppollingwrite----omit-in-toc)** - _Stop native polling write_
   * [`pause()`](https://nodejs.org/api/net.html#net_socket_pause)
   * `ref()` - _Will not have any effect_
   * [`resume()`](https://nodejs.org/api/net.html#net_socket_resume)
@@ -375,6 +424,38 @@ Here are listed all methods implemented in `react-native-tcp-socket` that imitat
 
 **Note**: The platforms marked as ❌ use the default value.
 
+##### `socket.startPollingWrite()` <!-- omit in toc -->
+`socket.startPollingWrite(interval, data[, encoding][, callback])` starts a polling write operation that repeatedly sends data at specified intervals. This operation runs in native code to prevent JavaScript thread blocking.
+
+**Parameters:**
+- `interval` `<number>` - **Required**. Interval in milliseconds between writes.
+- `data` `<string> | <Buffer> | <Uint8Array>` - **Required**. Data to be sent repeatedly.
+- `encoding` `<string>` - Encoding if data is a string. **Default**: `'utf8'`.
+- `callback` `<function>` - Optional callback function called when operation starts or fails.
+
+**Returns:** `<Promise<string>>` - Promise that resolves to interval ID that can be used to stop the polling.
+
+**Example:**
+```javascript
+const intervalId = await socket.startPollingWrite(1000, 'heartbeat\n', 'utf8');
+console.log('Started polling with ID:', intervalId);
+```
+
+##### `socket.stopPollingWrite()` <!-- omit in toc -->
+`socket.stopPollingWrite(intervalId[, callback])` stops a specific polling write operation.
+
+**Parameters:**
+- `intervalId` `<string>` - **Required**. The interval ID returned by `startPollingWrite()`.
+- `callback` `<function>` - Optional callback function called when operation completes.
+
+**Returns:** `<Promise<boolean>>` - Promise that resolves to `true` if the interval was found and stopped, `false` otherwise.
+
+**Example:**
+```javascript
+const stopped = await socket.stopPollingWrite(intervalId);
+console.log('Polling stopped:', stopped);
+```
+
 #### Server
 * **Methods:**
   * [`address()`](https://nodejs.org/api/net.html#net_server_address)
@@ -408,7 +489,7 @@ Here are listed all methods implemented in `react-native-tcp-socket` that imitat
 
 #### TLSSocket
 * **Methods:**
-  * All methods from [`Socket`](#socket)
+  * All methods from [`Socket`](#socket) (including polling write methods)
   * [`getCertificate()`](https://nodejs.org/api/tls.html#tlssocketgetcertificate)
   * **[`getPeerCertificate()`](https://nodejs.org/api/tls.html#tlssocketgetpeercertificatedetailed)**
 * **Properties:**
