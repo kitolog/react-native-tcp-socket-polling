@@ -443,12 +443,17 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 }
 
 - (void)destroy {
-    // Stop all polling timers
-    NSArray *intervalIds = [_pollingTimers allKeys];
-    for (NSString *intervalId in intervalIds) {
-        [self stopPollingWrite:intervalId];
-    }
-    [_pollingTimers removeAllObjects];
+    // Stop all polling timers on main thread
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSArray *intervalIds = [self->_pollingTimers allKeys];
+        for (NSString *intervalId in intervalIds) {
+            NSTimer *timer = [self->_pollingTimers objectForKey:intervalId];
+            if (timer) {
+                [timer invalidate];
+            }
+        }
+        [self->_pollingTimers removeAllObjects];
+    });
     
     [_tcpSocket disconnect];
 }
@@ -906,29 +911,78 @@ typedef NS_ENUM(NSInteger, PEMType) {
     // Convert milliseconds to seconds for NSTimer
     NSTimeInterval intervalInSeconds = interval / 1000.0;
     
-    NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:intervalInSeconds
-                                                     repeats:YES
-                                                       block:^(NSTimer * _Nonnull timer) {
-        if (!self->_tcpSocket || !self->_tcpSocket.isConnected) {
-            [self stopPollingWrite:intervalId];
-            return;
-        }
+    // Ensure timer is scheduled on main thread with active run loop
+    if ([NSThread isMainThread]) {
+        // Already on main thread, create timer directly
+        NSTimer *timer = [NSTimer timerWithTimeInterval:intervalInSeconds
+                                                repeats:YES
+                                                  block:^(NSTimer * _Nonnull timer) {
+            if (!self->_tcpSocket || !self->_tcpSocket.isConnected) {
+                [self stopPollingWrite:intervalId];
+                return;
+            }
+            
+            // Perform write operation on socket's delegate queue
+            dispatch_async([self methodQueue], ^{
+                [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+            });
+        }];
         
-        [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
-    }];
+        // Add timer to main run loop
+        [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+        [_pollingTimers setObject:timer forKey:intervalId];
+    } else {
+        // Not on main thread, use dispatch_sync to ensure timer is created before returning
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            NSTimer *timer = [NSTimer timerWithTimeInterval:intervalInSeconds
+                                                    repeats:YES
+                                                      block:^(NSTimer * _Nonnull timer) {
+                if (!self->_tcpSocket || !self->_tcpSocket.isConnected) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [self stopPollingWrite:intervalId];
+                    });
+                    return;
+                }
+                
+                // Perform write operation on socket's delegate queue
+                dispatch_async([self methodQueue], ^{
+                    [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+                });
+            }];
+            
+            // Add timer to main run loop
+            [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+            [self->_pollingTimers setObject:timer forKey:intervalId];
+        });
+    }
     
-    [_pollingTimers setObject:timer forKey:intervalId];
     return intervalId;
 }
 
 - (BOOL)stopPollingWrite:(NSString *)intervalId {
-    NSTimer *timer = [_pollingTimers objectForKey:intervalId];
-    if (timer) {
-        [timer invalidate];
-        [_pollingTimers removeObjectForKey:intervalId];
-        return YES;
+    __block BOOL found = NO;
+    
+    if ([NSThread isMainThread]) {
+        // Already on main thread, stop timer directly
+        NSTimer *timer = [_pollingTimers objectForKey:intervalId];
+        if (timer) {
+            [timer invalidate];
+            [_pollingTimers removeObjectForKey:intervalId];
+            found = YES;
+        }
+    } else {
+        // Not on main thread, use dispatch_sync to ensure timer is stopped before returning
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            NSTimer *timer = [self->_pollingTimers objectForKey:intervalId];
+            if (timer) {
+                [timer invalidate];
+                [self->_pollingTimers removeObjectForKey:intervalId];
+                found = YES;
+            }
+        });
     }
-    return NO;
+    
+    return found;
 }
 
 // We need an ASN1 decoder to parse properly but for my case I only need modulus
