@@ -1,7 +1,7 @@
 {
   "name": "react-native-tcp-socket-polling",
   "title": "React Native Tcp Socket Polling",
-  "version": "6.3.0",
+  "version": "6.3.1",
   "description": "React Native TCP socket API for Android & iOS with SSL/TLS and polling support",
   "main": "src/index.js",
   "types": "lib/types/index.d.ts",
@@ -26,8 +26,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Rapsssito/react-native-tcp-socket.git",
-    "baseUrl": "https://github.com/Rapsssito/react-native-tcp-socket"
+    "url": "git+https://github.com/kitolog/react-native-tcp-socket-polling.git",
+    "baseUrl": "https://github.com/kitolog/react-native-tcp-socket-polling"
   },
   "keywords": [
     "react-native",
@@ -49,6 +49,12 @@
     "name": "Rapsssito",
     "email": "contact@rodrigomartin.dev"
   },
+  "contributors": [
+    {
+      "name": "kitolog",
+      "email": "kitolog1@gmail.com"
+    }
+  ],
   "license": "MIT",
   "licenseFilename": "LICENSE",
   "readmeFilename": "README.md",
