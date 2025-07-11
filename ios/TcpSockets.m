@@ -209,6 +209,38 @@ RCT_EXPORT_METHOD(getCertificate:(nonnull NSNumber *)cId
     resolve(cert ?: [NSNull null]);
 }
 
+RCT_EXPORT_METHOD(startPollingWrite:(nonnull NSNumber *)cId
+                  interval:(int)interval
+                  string:(nonnull NSString *)base64String
+                  encoding:(NSString *)encoding
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    TcpSocketClient *client = [self findClient:cId];
+    if (!client) {
+        reject(@"NOT_FOUND", @"Client not found", nil);
+        return;
+    }
+    
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String
+                                                       options:0];
+    NSString *intervalId = [client startPollingWrite:interval data:data];
+    resolve(intervalId);
+}
+
+RCT_EXPORT_METHOD(stopPollingWrite:(nonnull NSNumber *)cId
+                  intervalId:(nonnull NSString *)intervalId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    TcpSocketClient *client = [self findClient:cId];
+    if (!client) {
+        reject(@"NOT_FOUND", @"Client not found", nil);
+        return;
+    }
+    
+    BOOL stopped = [client stopPollingWrite:intervalId];
+    resolve(@(stopped));
+}
+
 - (void)onWrittenData:(TcpSocketClient *)client msgId:(NSNumber *)msgId {
     [self sendEventWithName:@"written"
                        body:@{

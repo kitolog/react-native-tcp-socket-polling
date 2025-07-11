@@ -141,4 +141,19 @@ typedef enum RCTTCPError RCTTCPError;
  */
 - (NSDictionary *)getCertificate;
 
+/**
+ * Start polling write operation that repeatedly sends data at specified intervals
+ * @param interval interval in milliseconds
+ * @param data data to be sent
+ * @return intervalId that can be used to stop the polling
+ */
+- (NSString *)startPollingWrite:(int)interval data:(NSData *)data;
+
+/**
+ * Stop a polling write operation
+ * @param intervalId the interval ID returned by startPollingWrite
+ * @return true if the interval was found and stopped, false otherwise
+ */
+- (BOOL)stopPollingWrite:(NSString *)intervalId;
+
 @end

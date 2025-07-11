@@ -66,6 +66,10 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
     long _sendTag;
     SecTrustRef _peerTrust;
     SecIdentityRef _clientIdentity;
+    
+    // Polling write functionality
+    NSMutableDictionary<NSString *, NSTimer *> *_pollingTimers;
+    int _intervalIdCounter;
 }
 
 - (id)initWithClientId:(NSNumber *)clientID
@@ -117,6 +121,10 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         [_tcpSocket setUserData:clientID];
         [_tcpSocket setDelegate:self];
         [_tcpSocket setDelegateQueue:[self methodQueue]];
+        
+        // Initialize polling write functionality
+        _pollingTimers = [NSMutableDictionary dictionary];
+        _intervalIdCounter = 0;
     }
 
     return self;
@@ -435,6 +443,13 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 }
 
 - (void)destroy {
+    // Stop all polling timers
+    NSArray *intervalIds = [_pollingTimers allKeys];
+    for (NSString *intervalId in intervalIds) {
+        [self stopPollingWrite:intervalId];
+    }
+    [_pollingTimers removeAllObjects];
+    
     [_tcpSocket disconnect];
 }
 
@@ -877,6 +892,43 @@ typedef NS_ENUM(NSInteger, PEMType) {
     CFRelease(certificate);
 
     return result;
+}
+
+- (NSString *)startPollingWrite:(int)interval data:(NSData *)data {
+    if (!_tcpSocket || !_tcpSocket.isConnected) {
+        @throw [NSException exceptionWithName:@"IllegalStateException"
+                                       reason:@"Socket is not connected"
+                                     userInfo:nil];
+    }
+    
+    NSString *intervalId = [NSString stringWithFormat:@"%@_%d", _id, ++_intervalIdCounter];
+    
+    // Convert milliseconds to seconds for NSTimer
+    NSTimeInterval intervalInSeconds = interval / 1000.0;
+    
+    NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:intervalInSeconds
+                                                     repeats:YES
+                                                       block:^(NSTimer * _Nonnull timer) {
+        if (!self->_tcpSocket || !self->_tcpSocket.isConnected) {
+            [self stopPollingWrite:intervalId];
+            return;
+        }
+        
+        [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+    }];
+    
+    [_pollingTimers setObject:timer forKey:intervalId];
+    return intervalId;
+}
+
+- (BOOL)stopPollingWrite:(NSString *)intervalId {
+    NSTimer *timer = [_pollingTimers objectForKey:intervalId];
+    if (timer) {
+        [timer invalidate];
+        [_pollingTimers removeObjectForKey:intervalId];
+        return YES;
+    }
+    return NO;
 }
 
 // We need an ASN1 decoder to parse properly but for my case I only need modulus

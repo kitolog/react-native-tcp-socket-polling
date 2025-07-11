@@ -1,8 +1,8 @@
 {
-  "name": "react-native-tcp-socket",
-  "title": "React Native Tcp Socket",
+  "name": "react-native-tcp-socket-polling",
+  "title": "React Native Tcp Socket Polling",
   "version": "6.3.0",
-  "description": "React Native TCP socket API for Android & iOS with SSL/TLS support",
+  "description": "React Native TCP socket API for Android & iOS with SSL/TLS and polling support",
   "main": "src/index.js",
   "types": "lib/types/index.d.ts",
   "scripts": {

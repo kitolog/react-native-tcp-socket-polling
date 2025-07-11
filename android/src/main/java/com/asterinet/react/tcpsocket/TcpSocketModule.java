@@ -504,6 +504,31 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @SuppressWarnings("unused")
+    @ReactMethod
+    public void startPollingWrite(final int cId, final int interval, @NonNull final String base64String, final String encoding, Promise promise) {
+        try {
+            final TcpSocketClient client = getTcpClient(cId);
+            byte[] data = Base64.decode(base64String, Base64.NO_WRAP);
+            String intervalId = client.startPollingWrite(interval, data);
+            promise.resolve(intervalId);
+        } catch (Exception e) {
+            promise.reject(e);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    @ReactMethod
+    public void stopPollingWrite(final int cId, @NonNull final String intervalId, Promise promise) {
+        try {
+            final TcpSocketClient client = getTcpClient(cId);
+            boolean stopped = client.stopPollingWrite(intervalId);
+            promise.resolve(stopped);
+        } catch (Exception e) {
+            promise.reject(e);
+        }
+    }
+
     private static class CurrentNetwork {
         @Nullable
         Network network = null;

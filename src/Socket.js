@@ -362,6 +362,50 @@ export default class Socket extends EventEmitter {
     }
 
     /**
+     * Starts polling write operation that repeatedly sends data at specified intervals.
+     * This runs in native code to avoid JS thread blocking.
+     *
+     * @param {number} interval interval in milliseconds
+     * @param {string | Buffer | Uint8Array} data data to be sent
+     * @param {BufferEncoding} [encoding] encoding if data is a string
+     * @param {(err?: Error) => void} [callback] optional callback
+     * @returns {Promise<string>} Promise that resolves to interval ID that can be used to stop the polling
+     */
+    async startPollingWrite(interval, data, encoding, callback) {
+        if (this._pending || this._destroyed) throw new Error('Socket is closed.');
+        
+        const generatedBuffer = this._generateSendBuffer(data, encoding);
+        const base64String = generatedBuffer.toString('base64');
+        
+        try {
+            const intervalId = await Sockets.startPollingWrite(this._id, interval, base64String, encoding || 'utf8');
+            if (callback) callback();
+            return intervalId;
+        } catch (err) {
+            if (callback) callback(err);
+            throw err;
+        }
+    }
+
+    /**
+     * Stops a polling write operation.
+     *
+     * @param {string} intervalId the interval ID returned by startPollingWrite
+     * @param {(err?: Error) => void} [callback] optional callback
+     * @returns {Promise<boolean>} Promise that resolves to true if the interval was found and stopped, false otherwise
+     */
+    async stopPollingWrite(intervalId, callback) {
+        try {
+            const stopped = await Sockets.stopPollingWrite(this._id, intervalId);
+            if (callback) callback();
+            return stopped;
+        } catch (err) {
+            if (callback) callback(err);
+            throw err;
+        }
+    }
+
+    /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */
     pause() {

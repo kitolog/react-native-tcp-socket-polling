@@ -188,6 +188,25 @@ export default class Socket extends EventEmitter<SocketEvents & ReadableEvents, 
      */
     write(buffer: string | Buffer | Uint8Array, encoding?: "ascii" | "utf8" | "utf-8" | "utf16le" | "ucs2" | "ucs-2" | "base64" | "latin1" | "binary" | "hex" | undefined, cb?: ((err?: Error | undefined) => void) | undefined): boolean;
     /**
+     * Starts polling write operation that repeatedly sends data at specified intervals.
+     * This runs in native code to avoid JS thread blocking.
+     *
+     * @param {number} interval interval in milliseconds
+     * @param {string | Buffer | Uint8Array} data data to be sent
+     * @param {BufferEncoding} [encoding] encoding if data is a string
+     * @param {(err?: Error) => void} [callback] optional callback
+     * @returns {Promise<string>} Promise that resolves to interval ID that can be used to stop the polling
+     */
+    startPollingWrite(interval: number, data: string | Buffer | Uint8Array, encoding?: "ascii" | "utf8" | "utf-8" | "utf16le" | "ucs2" | "ucs-2" | "base64" | "latin1" | "binary" | "hex" | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<string>;
+    /**
+     * Stops a polling write operation.
+     *
+     * @param {string} intervalId the interval ID returned by startPollingWrite
+     * @param {(err?: Error) => void} [callback] optional callback
+     * @returns {Promise<boolean>} Promise that resolves to true if the interval was found and stopped, false otherwise
+     */
+    stopPollingWrite(intervalId: string, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
+    /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */
     pause(): void;

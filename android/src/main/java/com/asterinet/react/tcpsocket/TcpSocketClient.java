@@ -13,8 +13,13 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -26,6 +31,11 @@ class TcpSocketClient extends TcpSocket {
     private TcpReceiverTask receiverTask;
     private Socket socket;
     private boolean closed = true;
+    
+    // Polling write functionality
+    private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(2);
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> pollingIntervals = new ConcurrentHashMap<>();
+    private final AtomicInteger intervalIdCounter = new AtomicInteger(0);
 
     TcpSocketClient(TcpEventListener receiverListener, Integer id, Socket socket) {
         super(id);
@@ -178,10 +188,66 @@ class TcpSocketClient extends TcpSocket {
     }
 
     /**
+     * Starts polling write operation that repeatedly sends data at specified intervals
+     *
+     * @param intervalMs interval in milliseconds
+     * @param data       data to be sent
+     * @return intervalId that can be used to stop the polling
+     */
+    public String startPollingWrite(final int intervalMs, final byte[] data) {
+        if (socket == null) {
+            throw new IllegalStateException("Socket is not connected");
+        }
+        
+        final String intervalId = getId() + "_" + intervalIdCounter.incrementAndGet();
+        
+        ScheduledFuture<?> future = pollingExecutor.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                if (socket == null || socket.isClosed()) {
+                    stopPollingWrite(intervalId);
+                    return;
+                }
+                try {
+                    socket.getOutputStream().write(data);
+                } catch (IOException e) {
+                    receiverListener.onError(getId(), e);
+                    stopPollingWrite(intervalId);
+                }
+            }
+        }, 0, intervalMs, TimeUnit.MILLISECONDS);
+        
+        pollingIntervals.put(intervalId, future);
+        return intervalId;
+    }
+
+    /**
+     * Stops a polling write operation
+     *
+     * @param intervalId the interval ID returned by startPollingWrite
+     * @return true if the interval was found and stopped, false otherwise
+     */
+    public boolean stopPollingWrite(final String intervalId) {
+        ScheduledFuture<?> future = pollingIntervals.remove(intervalId);
+        if (future != null) {
+            future.cancel(false);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Shuts down the receiver task, closing the socket.
      */
     public void destroy() {
         try {
+            // Stop all polling intervals
+            for (String intervalId : pollingIntervals.keySet()) {
+                stopPollingWrite(intervalId);
+            }
+            pollingIntervals.clear();
+            pollingExecutor.shutdown();
+            
             // close the socket
             if (socket != null && !socket.isClosed()) {
                 closed = true;
