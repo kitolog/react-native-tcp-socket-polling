@@ -40,22 +40,22 @@ React Native TCP socket API for Android, iOS & macOS with **SSL/TLS support** an
 Install the library using either Yarn:
 
 ```
-yarn add react-native-tcp-socket
+yarn add react-native-tcp-socket-polling
 ```
 
 or npm:
 
 ```
-npm install --save react-native-tcp-socket
+npm install --save react-native-tcp-socket-polling
 ```
 
 #### Overriding `net`
-Since `react-native-tcp-socket` offers the same API as Node's net, in case you want to import this module as `net` or use `require('net')` in your JavaScript, you must add the following lines to your `package.json` file.
+Since `react-native-tcp-socket-polling` offers the same API as Node's net, in case you want to import this module as `net` or use `require('net')` in your JavaScript, you must add the following lines to your `package.json` file.
 
 ```json
 {
   "react-native": {
-    "net": "react-native-tcp-socket"
+    "net": "react-native-tcp-socket-polling"
   }
 }
 ```
@@ -65,7 +65,7 @@ In addition, in order to obtain the TS types (or autocompletion) provided by thi
 ```ts
 ...
 declare module 'net' {
-    import TcpSockets from 'react-native-tcp-socket';
+    import TcpSockets from 'react-native-tcp-socket-polling';
     export = TcpSockets;
 }
 ```
@@ -85,7 +85,7 @@ In addition, in order to obtain the TS types (or autocompletion) provided by thi
 ```ts
 ...
 declare module 'tls' {
-    import TcpSockets from 'react-native-tcp-socket';
+    import TcpSockets from 'react-native-tcp-socket-polling';
     export const Server = TcpSockets.TLSServer;
     export const TLSSocket = TcpSockets.TLSSocket;
     export const connect = TcpSockets.connectTLS;
@@ -144,7 +144,7 @@ module.exports = {
 
 You then need to link the native parts of the library for the platforms you are using. The easiest way to link the library is using the CLI tool by running this command from the root of your project:
 
-`$ react-native link react-native-tcp-socket`
+`$ react-native link react-native-tcp-socket-polling`
 
 If you can't or don't want to use the CLI tool, you can also manually link the library using the instructions below (click on the arrow to show them):
 
@@ -152,7 +152,7 @@ If you can't or don't want to use the CLI tool, you can also manually link the l
 <summary>Manually link the library on iOS</summary>
 
 1. In XCode, in the project navigator, right click `Libraries` ➜ `Add Files to [your project's name]`
-2. Go to `node_modules` ➜ `react-native-tcp-socket` and add `TcpSockets.xcodeproj`
+2. Go to `node_modules` ➜ `react-native-tcp-socket-polling` and add `TcpSockets.xcodeproj`
 3. In XCode, in the project navigator, select your project. Add `libTcpSockets.a` to your project's `Build Phases` ➜ `Link Binary With Libraries`
 4. Run your project (`Cmd+R`)<
 </details>
@@ -165,22 +165,21 @@ If you can't or don't want to use the CLI tool, you can also manually link the l
   - Add `new TcpSocketPackage()` to the list returned by the `getPackages()` method
 2. Append the following lines to `android/settings.gradle`:
   	```
-  	include ':react-native-tcp-socket'
-  	project(':react-native-tcp-socket').projectDir = new File(rootProject.projectDir, 	'../node_modules/react-native-tcp-socket/android')
+  	include ':react-native-tcp-socket-polling'
+  	project(':react-native-tcp-socket-polling').projectDir = new File(rootProject.projectDir, 	'../node_modules/react-native-tcp-socket-polling/android')
   	```
 3. Insert the following lines inside the dependencies block in `android/app/build.gradle`:
   	```
-      implementation project(':react-native-tcp-socket')
+      implementation project(':react-native-tcp-socket-polling')
   	```
 </details>
 
 ## React Native Compatibility
 To use this library you need to ensure you are using the correct version of React Native. If you are using a version of React Native that is lower than `0.60` you will need to upgrade before attempting to use the latest version.
 
-| `react-native-tcp-socket` version  | Required React Native Version |
+| `react-native-tcp-socket-polling` version  | Required React Native Version |
 | ---------------------------------- | ----------------------------- |
-| `6.X.X`, `5.X.X`, `4.X.X`, `3.X.X` | `>= 0.60.0`                   |
-| `1.4.0`                            | `>= Unknown`                  |
+| `6.X.X`                         | `>= Unknown`                  |
 
 ## Usage
 Import the library:
