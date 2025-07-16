@@ -33,8 +33,8 @@ class TcpSocketClient extends TcpSocket {
     private boolean closed = true;
 
     // Polling write functionality
-    // changed 2 to 10
-    private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(10);
+    // changed 2 to 15
+    private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(15);
     private final ConcurrentHashMap<String, ScheduledFuture<?>> pollingIntervals = new ConcurrentHashMap<>();
     private final AtomicInteger intervalIdCounter = new AtomicInteger(0);
 
