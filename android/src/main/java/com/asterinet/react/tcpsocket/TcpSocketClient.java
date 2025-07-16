@@ -31,9 +31,10 @@ class TcpSocketClient extends TcpSocket {
     private TcpReceiverTask receiverTask;
     private Socket socket;
     private boolean closed = true;
-    
+
     // Polling write functionality
-    private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(2);
+    // changed 2 to 10
+    private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(10);
     private final ConcurrentHashMap<String, ScheduledFuture<?>> pollingIntervals = new ConcurrentHashMap<>();
     private final AtomicInteger intervalIdCounter = new AtomicInteger(0);
 
@@ -198,9 +199,9 @@ class TcpSocketClient extends TcpSocket {
         if (socket == null) {
             throw new IllegalStateException("Socket is not connected");
         }
-        
+
         final String intervalId = getId() + "_" + intervalIdCounter.incrementAndGet();
-        
+
         ScheduledFuture<?> future = pollingExecutor.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -216,7 +217,7 @@ class TcpSocketClient extends TcpSocket {
                 }
             }
         }, 0, intervalMs, TimeUnit.MILLISECONDS);
-        
+
         pollingIntervals.put(intervalId, future);
         return intervalId;
     }
@@ -247,7 +248,7 @@ class TcpSocketClient extends TcpSocket {
             }
             pollingIntervals.clear();
             pollingExecutor.shutdown();
-            
+
             // close the socket
             if (socket != null && !socket.isClosed()) {
                 closed = true;

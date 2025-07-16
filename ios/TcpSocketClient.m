@@ -66,7 +66,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
     long _sendTag;
     SecTrustRef _peerTrust;
     SecIdentityRef _clientIdentity;
-    
+
     // Polling write functionality
     NSMutableDictionary<NSString *, NSTimer *> *_pollingTimers;
     int _intervalIdCounter;
@@ -121,7 +121,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         [_tcpSocket setUserData:clientID];
         [_tcpSocket setDelegate:self];
         [_tcpSocket setDelegateQueue:[self methodQueue]];
-        
+
         // Initialize polling write functionality
         _pollingTimers = [NSMutableDictionary dictionary];
         _intervalIdCounter = 0;
@@ -221,7 +221,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
     if (keyAlias) { [settings setObject:keyAlias forKey:@"keyAlias"]; }
     NSString *certAlias = tlsOptions[@"certAlias"];
     if (certAlias) { [settings setObject:certAlias forKey:@"certAlias"]; }
-    
+
     // if user provides certAlias without cert it means an identity(cert+key) has already been
     //  inserted in keychain.
     if ((certAlias && certAlias.length > 0) && (!resolvableCert)) {
@@ -232,7 +232,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
             (__bridge id)kSecAttrLabel : certAlias
         };
         SecItemCopyMatching((__bridge CFDictionaryRef)identityQuery, (CFTypeRef *)&myIdent);
-        
+
     } else if (resolvableCert != nil && resolvableKey != nil) {
         //RCTLogWarn(@"startTLS: Attempting client certificate authentication");
         NSString *pemCert = [resolvableCert resolve];
@@ -244,11 +244,11 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
             //RCTLogWarn(@"startTLS: Identity creation %@", myIdent ? @"successful" : @"failed");
         }
     }
-    
+
     if (myIdent) {
         if (_clientIdentity) { CFRelease(_clientIdentity); }
         _clientIdentity = (SecIdentityRef)CFRetain(myIdent);
-        
+
         NSArray *myCerts = @[ (__bridge id)myIdent ];
         [settings setObject:myCerts
                      forKey:(NSString *)kCFStreamSSLCertificates];
@@ -454,7 +454,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         }
         [self->_pollingTimers removeAllObjects];
     });
-    
+
     [_tcpSocket disconnect];
 }
 
@@ -687,7 +687,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
         0x0D, 0x01, 0x01, 0x01, 0x05, 0x00, 0x04, 0x82,
         0x04, 0xA8
     };
-    
+
     // Check for minimum data length
     if (pkcs8Data.length <= sizeof(rsa2048Prefix)) {
         if (error) {
@@ -699,7 +699,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
         }
         return nil;
     }
-    
+
     // Verify RSA 2048-bit key prefix - We need a ASN1 decoder to support more !!!
     if (memcmp(pkcs8Data.bytes, rsa2048Prefix, sizeof(rsa2048Prefix)) != 0) {
         if (error) {
@@ -711,7 +711,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
         }
         return nil;
     }
-    
+
     // Extract the RSA private key data
     return [pkcs8Data subdataWithRange:NSMakeRange(sizeof(rsa2048Prefix),
                                                    pkcs8Data.length - sizeof(rsa2048Prefix))];
@@ -762,7 +762,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
         CFRelease(cert);
         return NULL;
     }
-                                    
+
     NSDictionary *privateKeyAttributes = @{
         (__bridge id)kSecAttrKeyType : (__bridge id)kSecAttrKeyTypeRSA,
         (__bridge id)kSecAttrKeyClass : (__bridge id)kSecAttrKeyClassPrivate
@@ -799,7 +799,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
         CFRelease(privateKey);
         return NULL;
     }
-                                    
+
     NSDictionary *identityQuery = @{
         (__bridge id)kSecClass : (__bridge id)kSecClassIdentity,
         (__bridge id)kSecReturnRef : @YES,
@@ -807,16 +807,16 @@ typedef NS_ENUM(NSInteger, PEMType) {
     };
     status = SecItemCopyMatching((__bridge CFDictionaryRef)identityQuery,
                                  (CFTypeRef *)&identity);
-    
+
     if (status != errSecSuccess || !identity) {
         RCTLogWarn(@"createIdentity: Failed to find identity, status: %d",
                    (int)status);
     }
-    
+
     // Clean up
     CFRelease(cert);
     CFRelease(privateKey);
-    
+
     return identity;
 }
 
@@ -862,7 +862,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
 
 - (NSDictionary *)getPeerCertificate {
     NSDictionary *result = nil;
-    
+
     if (!_tcpSocket || !_tls || !_peerTrust) {
         return nil;
     }
@@ -878,11 +878,11 @@ typedef NS_ENUM(NSInteger, PEMType) {
 
 - (NSDictionary *)getCertificate {
     NSDictionary *result = nil;
-    
+
     if (!_tcpSocket || !_tls) {
         return nil;
     }
-    
+
     SecCertificateRef certificate = NULL;
     if (_clientIdentity) {
         // If we have a client identity, get the certificate from it
@@ -905,12 +905,12 @@ typedef NS_ENUM(NSInteger, PEMType) {
                                        reason:@"Socket is not connected"
                                      userInfo:nil];
     }
-    
+
     NSString *intervalId = [NSString stringWithFormat:@"%@_%d", _id, ++_intervalIdCounter];
-    
+
     // Convert milliseconds to seconds for NSTimer
     NSTimeInterval intervalInSeconds = interval / 1000.0;
-    
+
     // Ensure timer is scheduled on main thread with active run loop
     if ([NSThread isMainThread]) {
         // Already on main thread, create timer directly
@@ -921,19 +921,20 @@ typedef NS_ENUM(NSInteger, PEMType) {
                 [self stopPollingWrite:intervalId];
                 return;
             }
-            
+
             // Perform write operation on socket's delegate queue
             dispatch_async([self methodQueue], ^{
                 [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
             });
         }];
-        
+
         // Add timer to main run loop
         [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
         [_pollingTimers setObject:timer forKey:intervalId];
     } else {
         // Not on main thread, use dispatch_sync to ensure timer is created before returning
-        dispatch_sync(dispatch_get_main_queue(), ^{
+//         dispatch_sync(dispatch_get_main_queue(), ^{
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSTimer *timer = [NSTimer timerWithTimeInterval:intervalInSeconds
                                                     repeats:YES
                                                       block:^(NSTimer * _Nonnull timer) {
@@ -943,25 +944,25 @@ typedef NS_ENUM(NSInteger, PEMType) {
                     });
                     return;
                 }
-                
+
                 // Perform write operation on socket's delegate queue
                 dispatch_async([self methodQueue], ^{
                     [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
                 });
             }];
-            
+
             // Add timer to main run loop
             [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
             [self->_pollingTimers setObject:timer forKey:intervalId];
         });
     }
-    
+
     return intervalId;
 }
 
 - (BOOL)stopPollingWrite:(NSString *)intervalId {
     __block BOOL found = NO;
-    
+
     if ([NSThread isMainThread]) {
         // Already on main thread, stop timer directly
         NSTimer *timer = [_pollingTimers objectForKey:intervalId];
@@ -981,7 +982,7 @@ typedef NS_ENUM(NSInteger, PEMType) {
             }
         });
     }
-    
+
     return found;
 }
 
@@ -1067,19 +1068,19 @@ typedef NS_ENUM(NSInteger, PEMType) {
     // Parse DER-encoded RSAPublicKey structure
     const uint8_t *bytes = keyData.bytes;
     NSInteger length = keyData.length;
-    
+
     // Skip header and length bytes
     if (length < 2 || bytes[0] != 0x30) return nil;
-    
+
     NSInteger idx = 2;
     if (bytes[1] & 0x80) {
         idx += (bytes[1] & 0x7F);
     }
-    
+
     // Read modulus
     if (idx >= length || bytes[idx] != 0x02) return nil;
     idx++;
-    
+
     NSInteger modulusLength = bytes[idx++];
     if (modulusLength & 0x80) {
         int lenBytes = modulusLength & 0x7F;
@@ -1088,35 +1089,35 @@ typedef NS_ENUM(NSInteger, PEMType) {
             modulusLength = (modulusLength << 8) | bytes[idx++];
         }
     }
-    
+
     // Skip leading zero if present for modulus
     NSInteger startOffset = 0;
     if (bytes[idx] == 0x00) {
         startOffset = 1;
         modulusLength--;
     }
-    
+
     NSMutableString *modulus = [NSMutableString string];
     for (NSInteger i = 0; i < modulusLength; i++) {
         [modulus appendFormat:@"%02X", bytes[idx + startOffset + i]];
     }
     idx += modulusLength + startOffset;
-    
+
     // Read exponent
     if (idx >= length || bytes[idx] != 0x02) return nil;
     idx++;
-    
+
     NSInteger exponentLength = bytes[idx++];
     // Build exponent hex string
     NSMutableString *exponentHex = [NSMutableString string];
     for (NSInteger i = 0; i < exponentLength; i++) {
         [exponentHex appendFormat:@"%02X", bytes[idx + i]];
     }
-    
+
     // Remove leading zeros from the exponent
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"^0+(?=[0-9A-F]+)" options:0 error:nil];
     NSString *exponent = [re stringByReplacingMatchesInString:exponentHex options:0 range:NSMakeRange(0, exponentHex.length) withTemplate:@""];
-    
+
     return @[modulus, exponent];
 }
 
