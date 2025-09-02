@@ -911,6 +911,11 @@ typedef NS_ENUM(NSInteger, PEMType) {
     // Convert milliseconds to seconds for NSTimer
     NSTimeInterval intervalInSeconds = interval / 1000.0;
 
+    // Send first write immediately on the socket's delegate queue
+    dispatch_async([self methodQueue], ^{
+        [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+    });
+
     // Ensure timer is scheduled on main thread with active run loop
     if ([NSThread isMainThread]) {
         // Already on main thread, create timer directly
