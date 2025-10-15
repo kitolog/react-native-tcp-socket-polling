@@ -373,16 +373,16 @@ export default class Socket extends EventEmitter {
      */
     async startPollingWrite(interval, data, encoding, callback) {
         if (this._pending || this._destroyed) throw new Error('Socket is closed.');
-        
+
         const generatedBuffer = this._generateSendBuffer(data, encoding);
         const base64String = generatedBuffer.toString('base64');
-        
+
         try {
             const intervalId = await Sockets.startPollingWrite(this._id, interval, base64String, encoding || 'utf8');
             if (callback) callback();
             return intervalId;
         } catch (err) {
-            if (callback) callback(err);
+            if (callback) callback(err instanceof Error ? err : new Error(String(err)));
             throw err;
         }
     }
@@ -400,7 +400,7 @@ export default class Socket extends EventEmitter {
             if (callback) callback();
             return stopped;
         } catch (err) {
-            if (callback) callback(err);
+            if (callback) callback(err instanceof Error ? err : new Error(String(err)));
             throw err;
         }
     }
@@ -410,6 +410,7 @@ export default class Socket extends EventEmitter {
      *
      * @param {string} intervalId The interval ID returned by startPollingWrite
      * @param {string | Buffer | Uint8Array} data New data to send on subsequent ticks
+     * @param {number} [firstDelayMs] Optional delay in milliseconds for the first updated message
      * @param {BufferEncoding} [encoding] Encoding if data is a string
      * @param {(err?: Error) => void} [callback]
      * @returns {Promise<boolean>} Promise that resolves true if updated
@@ -422,7 +423,7 @@ export default class Socket extends EventEmitter {
             if (callback) callback();
             return updated;
         } catch (err) {
-            if (callback) callback(err);
+            if (callback) callback(err instanceof Error ? err : new Error(String(err)));
             throw err;
         }
     }

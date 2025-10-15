@@ -211,11 +211,12 @@ export default class Socket extends EventEmitter<SocketEvents & ReadableEvents, 
      *
      * @param {string} intervalId The interval ID returned by startPollingWrite
      * @param {string | Buffer | Uint8Array} data New data to send on subsequent ticks
+     * @param {number} [firstDelayMs] Optional delay in milliseconds for the first updated message
      * @param {BufferEncoding} [encoding] Encoding if data is a string
      * @param {(err?: Error) => void} [callback]
      * @returns {Promise<boolean>} Promise that resolves true if updated
      */
-    updatePollingMessage(intervalId: string, data: string | Buffer | Uint8Array, firstDelayMs?: number | undefined, encoding?: BufferEncoding | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
+    updatePollingMessage(intervalId: string, data: string | Buffer | Uint8Array, firstDelayMs?: number | undefined, encoding?: "ascii" | "utf8" | "utf-8" | "utf16le" | "ucs2" | "ucs-2" | "base64" | "latin1" | "binary" | "hex" | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
     /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */
