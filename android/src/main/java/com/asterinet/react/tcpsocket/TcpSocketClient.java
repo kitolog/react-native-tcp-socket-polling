@@ -20,6 +20,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -36,6 +37,7 @@ class TcpSocketClient extends TcpSocket {
     // changed 2 to 15
     private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(15);
     private final ConcurrentHashMap<String, ScheduledFuture<?>> pollingIntervals = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicReference<byte[]>> pollingDataRefs = new ConcurrentHashMap<>();
     private final AtomicInteger intervalIdCounter = new AtomicInteger(0);
 
     TcpSocketClient(TcpEventListener receiverListener, Integer id, Socket socket) {
@@ -202,6 +204,9 @@ class TcpSocketClient extends TcpSocket {
 
         final String intervalId = getId() + "_" + intervalIdCounter.incrementAndGet();
 
+        final AtomicReference<byte[]> dataRef = new AtomicReference<>(data);
+        pollingDataRefs.put(intervalId, dataRef);
+
         ScheduledFuture<?> future = pollingExecutor.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -210,7 +215,10 @@ class TcpSocketClient extends TcpSocket {
                     return;
                 }
                 try {
-                    socket.getOutputStream().write(data);
+                    byte[] currentData = dataRef.get();
+                    if (currentData != null) {
+                        socket.getOutputStream().write(currentData);
+                    }
                 } catch (IOException e) {
                     receiverListener.onError(getId(), e);
                     stopPollingWrite(intervalId);
@@ -220,6 +228,22 @@ class TcpSocketClient extends TcpSocket {
 
         pollingIntervals.put(intervalId, future);
         return intervalId;
+    }
+
+    /**
+     * Updates the message payload for an existing polling interval without restarting it
+     *
+     * @param intervalId the interval ID returned by startPollingWrite
+     * @param newData    the new data to send on subsequent ticks
+     * @return true if interval exists and data was updated
+     */
+    public boolean updatePollingMessage(final String intervalId, final byte[] newData) {
+        final AtomicReference<byte[]> ref = pollingDataRefs.get(intervalId);
+        if (ref != null) {
+            ref.set(newData);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -247,6 +271,7 @@ class TcpSocketClient extends TcpSocket {
                 stopPollingWrite(intervalId);
             }
             pollingIntervals.clear();
+            pollingDataRefs.clear();
             pollingExecutor.shutdown();
 
             // close the socket

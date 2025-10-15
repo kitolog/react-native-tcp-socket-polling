@@ -69,6 +69,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 
     // Polling write functionality
     NSMutableDictionary<NSString *, NSTimer *> *_pollingTimers;
+    NSMutableDictionary<NSString *, NSData *> *_pollingData;
     int _intervalIdCounter;
 }
 
@@ -124,6 +125,7 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 
         // Initialize polling write functionality
         _pollingTimers = [NSMutableDictionary dictionary];
+        _pollingData = [NSMutableDictionary dictionary];
         _intervalIdCounter = 0;
     }
 
@@ -911,9 +913,20 @@ typedef NS_ENUM(NSInteger, PEMType) {
     // Convert milliseconds to seconds for NSTimer
     NSTimeInterval intervalInSeconds = interval / 1000.0;
 
+    // Save initial data
+    @synchronized (self) {
+        [_pollingData setObject:data forKey:intervalId];
+    }
+
     // Send first write immediately on the socket's delegate queue
     dispatch_async([self methodQueue], ^{
-        [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+        NSData *current = nil;
+        @synchronized (self) {
+            current = [self->_pollingData objectForKey:intervalId];
+        }
+        if (current) {
+            [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+        }
     });
 
     // Ensure timer is scheduled on main thread with active run loop
@@ -929,7 +942,13 @@ typedef NS_ENUM(NSInteger, PEMType) {
 
             // Perform write operation on socket's delegate queue
             dispatch_async([self methodQueue], ^{
-                [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+                NSData *current = nil;
+                @synchronized (self) {
+                    current = [self->_pollingData objectForKey:intervalId];
+                }
+                if (current) {
+                    [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+                }
             });
         }];
 
@@ -952,7 +971,13 @@ typedef NS_ENUM(NSInteger, PEMType) {
 
                 // Perform write operation on socket's delegate queue
                 dispatch_async([self methodQueue], ^{
-                    [self->_tcpSocket writeData:data withTimeout:-1 tag:0];
+                    NSData *current = nil;
+                    @synchronized (self) {
+                        current = [self->_pollingData objectForKey:intervalId];
+                    }
+                    if (current) {
+                        [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+                    }
                 });
             }];
 
@@ -974,6 +999,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
         if (timer) {
             [timer invalidate];
             [_pollingTimers removeObjectForKey:intervalId];
+            @synchronized (self) {
+                [self->_pollingData removeObjectForKey:intervalId];
+            }
             found = YES;
         }
     } else {
@@ -983,12 +1011,26 @@ typedef NS_ENUM(NSInteger, PEMType) {
             if (timer) {
                 [timer invalidate];
                 [self->_pollingTimers removeObjectForKey:intervalId];
+                @synchronized (self) {
+                    [self->_pollingData removeObjectForKey:intervalId];
+                }
                 found = YES;
             }
         });
     }
 
     return found;
+}
+
+- (BOOL)updatePollingMessage:(NSString *)intervalId data:(NSData *)data {
+    BOOL exists = NO;
+    @synchronized (self) {
+        if ([_pollingTimers objectForKey:intervalId] != nil) {
+            [_pollingData setObject:data forKey:intervalId];
+            exists = YES;
+        }
+    }
+    return exists;
 }
 
 // We need an ASN1 decoder to parse properly but for my case I only need modulus

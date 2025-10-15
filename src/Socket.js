@@ -406,6 +406,28 @@ export default class Socket extends EventEmitter {
     }
 
     /**
+     * Updates the polling message payload for an existing interval without restarting it.
+     *
+     * @param {string} intervalId The interval ID returned by startPollingWrite
+     * @param {string | Buffer | Uint8Array} data New data to send on subsequent ticks
+     * @param {BufferEncoding} [encoding] Encoding if data is a string
+     * @param {(err?: Error) => void} [callback]
+     * @returns {Promise<boolean>} Promise that resolves true if updated
+     */
+    async updatePollingMessage(intervalId, data, encoding, callback) {
+        try {
+            const generatedBuffer = this._generateSendBuffer(data, encoding);
+            const base64String = generatedBuffer.toString('base64');
+            const updated = await Sockets.updatePollingMessage(this._id, intervalId, base64String);
+            if (callback) callback();
+            return updated;
+        } catch (err) {
+            if (callback) callback(err);
+            throw err;
+        }
+    }
+
+    /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */
     pause() {

@@ -207,6 +207,16 @@ export default class Socket extends EventEmitter<SocketEvents & ReadableEvents, 
      */
     stopPollingWrite(intervalId: string, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
     /**
+     * Updates the polling message payload for an existing interval without restarting it.
+     *
+     * @param {string} intervalId The interval ID returned by startPollingWrite
+     * @param {string | Buffer | Uint8Array} data New data to send on subsequent ticks
+     * @param {BufferEncoding} [encoding] Encoding if data is a string
+     * @param {(err?: Error) => void} [callback]
+     * @returns {Promise<boolean>} Promise that resolves true if updated
+     */
+    updatePollingMessage(intervalId: string, data: string | Buffer | Uint8Array, encoding?: BufferEncoding | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
+    /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */
     pause(): void;

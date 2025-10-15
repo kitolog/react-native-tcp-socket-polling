@@ -241,6 +241,22 @@ RCT_EXPORT_METHOD(stopPollingWrite:(nonnull NSNumber *)cId
     resolve(@(stopped));
 }
 
+RCT_EXPORT_METHOD(updatePollingMessage:(nonnull NSNumber *)cId
+                  intervalId:(nonnull NSString *)intervalId
+                  string:(nonnull NSString *)base64String
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    TcpSocketClient *client = [self findClient:cId];
+    if (!client) {
+        reject(@"NOT_FOUND", @"Client not found", nil);
+        return;
+    }
+    
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+    BOOL updated = [client updatePollingMessage:intervalId data:data];
+    resolve(@(updated));
+}
+
 - (void)onWrittenData:(TcpSocketClient *)client msgId:(NSNumber *)msgId {
     [self sendEventWithName:@"written"
                        body:@{
