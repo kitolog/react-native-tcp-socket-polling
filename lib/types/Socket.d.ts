@@ -215,7 +215,7 @@ export default class Socket extends EventEmitter<SocketEvents & ReadableEvents, 
      * @param {(err?: Error) => void} [callback]
      * @returns {Promise<boolean>} Promise that resolves true if updated
      */
-    updatePollingMessage(intervalId: string, data: string | Buffer | Uint8Array, encoding?: BufferEncoding | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
+    updatePollingMessage(intervalId: string, data: string | Buffer | Uint8Array, firstDelayMs?: number | undefined, encoding?: BufferEncoding | undefined, callback?: ((err?: Error | undefined) => void) | undefined): Promise<boolean>;
     /**
      * Pauses the reading of data. That is, `'data'` events will not be emitted. Useful to throttle back an upload.
      */

@@ -159,6 +159,6 @@ typedef enum RCTTCPError RCTTCPError;
 /**
  * Update the polling message for an existing interval
  */
-- (BOOL)updatePollingMessage:(NSString *)intervalId data:(NSData *)data;
+- (BOOL)updatePollingMessage:(NSString *)intervalId data:(NSData *)data firstDelayMs:(NSNumber * _Nullable)firstDelayMs;
 
 @end

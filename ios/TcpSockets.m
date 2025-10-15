@@ -244,6 +244,7 @@ RCT_EXPORT_METHOD(stopPollingWrite:(nonnull NSNumber *)cId
 RCT_EXPORT_METHOD(updatePollingMessage:(nonnull NSNumber *)cId
                   intervalId:(nonnull NSString *)intervalId
                   string:(nonnull NSString *)base64String
+                  firstDelayMs:(nullable NSNumber *)firstDelayMs
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
     TcpSocketClient *client = [self findClient:cId];
@@ -253,7 +254,7 @@ RCT_EXPORT_METHOD(updatePollingMessage:(nonnull NSNumber *)cId
     }
     
     NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-    BOOL updated = [client updatePollingMessage:intervalId data:data];
+    BOOL updated = [client updatePollingMessage:intervalId data:data firstDelayMs:firstDelayMs];
     resolve(@(updated));
 }
 

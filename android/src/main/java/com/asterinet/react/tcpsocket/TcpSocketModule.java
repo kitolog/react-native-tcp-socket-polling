@@ -531,11 +531,11 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
 
     @SuppressWarnings("unused")
     @ReactMethod
-    public void updatePollingMessage(final int cId, @NonNull final String intervalId, @NonNull final String base64String, Promise promise) {
+    public void updatePollingMessage(final int cId, @NonNull final String intervalId, @NonNull final String base64String, @Nullable final Integer firstDelayMs, Promise promise) {
         try {
             final TcpSocketClient client = getTcpClient(cId);
             byte[] data = Base64.decode(base64String, Base64.NO_WRAP);
-            boolean updated = client.updatePollingMessage(intervalId, data);
+            boolean updated = client.updatePollingMessage(intervalId, data, firstDelayMs);
             promise.resolve(updated);
         } catch (Exception e) {
             promise.reject(e);

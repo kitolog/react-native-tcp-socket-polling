@@ -321,6 +321,20 @@ const client = TcpSocket.createConnection(options, async () => {
     const intervalId = await client.startPollingWrite(1000, 'ping\n', 'utf8');
     console.log(`Started polling write with interval ID: ${intervalId}`);
     
+    // Update the message after 2 seconds
+    setTimeout(async () => {
+      console.log('Updating polling message...');
+      const updated = await client.updatePollingMessage(intervalId, 'pong\n', 'utf8');
+      console.log(`Message updated: ${updated}`);
+    }, 2000);
+    
+    // Update with precise timing after 3 seconds
+    setTimeout(async () => {
+      console.log('Updating with precise timing...');
+      const updated = await client.updatePollingMessage(intervalId, 'urgent\n', 200, 'utf8');
+      console.log(`Precise update: ${updated}`);
+    }, 3000);
+    
     // Stop polling after 5 seconds
     setTimeout(async () => {
       console.log('Stopping polling write...');
@@ -355,6 +369,7 @@ This fork adds native polling write functionality that allows you to repeatedly 
 **New Methods:**
 - `startPollingWrite(interval, data[, encoding][, callback])` - Start polling write operation
 - `stopPollingWrite(intervalId[, callback])` - Stop specific polling operation
+- `updatePollingMessage(intervalId, data[, firstDelayMs][, encoding][, callback])` - Update polling data without restarting
 
 ## API
 ### net
@@ -379,6 +394,7 @@ Here are listed all methods implemented in `react-native-tcp-socket` that imitat
   * [`write(data[, encoding][, callback])`](https://nodejs.org/api/net.html#net_socket_write_data_encoding_callback)
   * **[`startPollingWrite(interval, data[, encoding][, callback])`](#socketstartpollingwrite----omit-in-toc)** - _Native polling write_
   * **[`stopPollingWrite(intervalId[, callback])`](#socketstoppollingwrite----omit-in-toc)** - _Stop native polling write_
+  * **[`updatePollingMessage(intervalId, data[, firstDelayMs][, encoding][, callback])`](#socketupdatepollingmessage----omit-in-toc)** - _Update polling data without restarting_
   * [`pause()`](https://nodejs.org/api/net.html#net_socket_pause)
   * `ref()` - _Will not have any effect_
   * [`resume()`](https://nodejs.org/api/net.html#net_socket_resume)
@@ -455,6 +471,35 @@ const stopped = await socket.stopPollingWrite(intervalId);
 console.log('Polling stopped:', stopped);
 ```
 
+##### `socket.updatePollingMessage()` <!-- omit in toc -->
+`socket.updatePollingMessage(intervalId, data[, firstDelayMs][, encoding][, callback])` updates the data being sent by an existing polling write operation without restarting the timer. This allows for dynamic message updates while maintaining precise timing.
+
+**Parameters:**
+- `intervalId` `<string>` - **Required**. The interval ID returned by `startPollingWrite()`.
+- `data` `<string> | <Buffer> | <Uint8Array>` - **Required**. New data to be sent repeatedly.
+- `firstDelayMs` `<number>` - Optional. Delay in milliseconds for the first updated message. If provided, the first updated message will be sent at the nearest aligned time based on the last sent message and this delay.
+- `encoding` `<string>` - Encoding if data is a string. **Default**: `'utf8'`.
+- `callback` `<function>` - Optional callback function called when operation completes.
+
+**Returns:** `<Promise<boolean>>` - Promise that resolves to `true` if the interval was found and data was updated, `false` otherwise.
+
+**Smart Timing Logic:**
+- If `firstDelayMs` is not provided, the data is updated for the next scheduled send
+- If `firstDelayMs` is provided, the system calculates the optimal send time:
+  - If target time >= next normal tick: Skip sending (normal timer will handle it)
+  - If target time < next normal tick and in the past: Add delays and validate
+  - If target time < next normal tick and in the future: Send at calculated time
+
+**Example:**
+```javascript
+// Update data without timing control
+const updated = await socket.updatePollingMessage(intervalId, 'new heartbeat\n', 'utf8');
+
+// Update data with precise timing control
+const updated = await socket.updatePollingMessage(intervalId, 'urgent update\n', 500, 'utf8');
+console.log('Data updated:', updated);
+```
+
 #### Server
 * **Methods:**
   * [`address()`](https://nodejs.org/api/net.html#net_server_address)
@@ -488,7 +533,7 @@ Here are listed all methods implemented in `react-native-tcp-socket` that imitat
 
 #### TLSSocket
 * **Methods:**
-  * All methods from [`Socket`](#socket) (including polling write methods)
+  * All methods from [`Socket`](#socket) (including `startPollingWrite`, `stopPollingWrite`, and `updatePollingMessage`)
   * [`getCertificate()`](https://nodejs.org/api/tls.html#tlssocketgetcertificate)
   * **[`getPeerCertificate()`](https://nodejs.org/api/tls.html#tlssocketgetpeercertificatedetailed)**
 * **Properties:**

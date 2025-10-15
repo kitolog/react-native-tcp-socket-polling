@@ -2,6 +2,7 @@
 #import <arpa/inet.h>
 #import <netinet/in.h>
 #import <netinet/tcp.h>
+#import <QuartzCore/QuartzCore.h>
 
 #import <React/RCTLog.h>
 
@@ -12,6 +13,7 @@
 #import <Security/SecKey.h>
 #import <Security/SecPolicy.h>
 #import <Security/Security.h>
+#import <QuartzCore/QuartzCore.h>
 
 NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 
@@ -70,6 +72,9 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
     // Polling write functionality
     NSMutableDictionary<NSString *, NSTimer *> *_pollingTimers;
     NSMutableDictionary<NSString *, NSData *> *_pollingData;
+    NSMutableDictionary<NSString *, NSNumber *> *_pollingPeriodsMs;
+    NSMutableDictionary<NSString *, NSNumber *> *_lastSentAtMs;
+    NSMutableDictionary<NSString *, dispatch_block_t> *_pendingOneShots;
     int _intervalIdCounter;
 }
 
@@ -126,6 +131,9 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         // Initialize polling write functionality
         _pollingTimers = [NSMutableDictionary dictionary];
         _pollingData = [NSMutableDictionary dictionary];
+        _pollingPeriodsMs = [NSMutableDictionary dictionary];
+        _lastSentAtMs = [NSMutableDictionary dictionary];
+        _pendingOneShots = [NSMutableDictionary dictionary];
         _intervalIdCounter = 0;
     }
 
@@ -913,9 +921,10 @@ typedef NS_ENUM(NSInteger, PEMType) {
     // Convert milliseconds to seconds for NSTimer
     NSTimeInterval intervalInSeconds = interval / 1000.0;
 
-    // Save initial data
+    // Save initial data and period
     @synchronized (self) {
         [_pollingData setObject:data forKey:intervalId];
+        [_pollingPeriodsMs setObject:@(interval) forKey:intervalId];
     }
 
     // Send first write immediately on the socket's delegate queue
@@ -926,6 +935,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
         }
         if (current) {
             [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+            @synchronized (self) {
+                [self->_lastSentAtMs setObject:@(CACurrentMediaTime() * 1000.0) forKey:intervalId];
+            }
         }
     });
 
@@ -948,6 +960,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
                 }
                 if (current) {
                     [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+                    @synchronized (self) {
+                        [self->_lastSentAtMs setObject:@(CACurrentMediaTime() * 1000.0) forKey:intervalId];
+                    }
                 }
             });
         }];
@@ -977,6 +992,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
                     }
                     if (current) {
                         [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+                        @synchronized (self) {
+                            [self->_lastSentAtMs setObject:@(CACurrentMediaTime() * 1000.0) forKey:intervalId];
+                        }
                     }
                 });
             }];
@@ -1001,6 +1019,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
             [_pollingTimers removeObjectForKey:intervalId];
             @synchronized (self) {
                 [self->_pollingData removeObjectForKey:intervalId];
+                [self->_pollingPeriodsMs removeObjectForKey:intervalId];
+                [self->_lastSentAtMs removeObjectForKey:intervalId];
+                [self->_pendingOneShots removeObjectForKey:intervalId];
             }
             found = YES;
         }
@@ -1013,6 +1034,9 @@ typedef NS_ENUM(NSInteger, PEMType) {
                 [self->_pollingTimers removeObjectForKey:intervalId];
                 @synchronized (self) {
                     [self->_pollingData removeObjectForKey:intervalId];
+                    [self->_pollingPeriodsMs removeObjectForKey:intervalId];
+                    [self->_lastSentAtMs removeObjectForKey:intervalId];
+                    [self->_pendingOneShots removeObjectForKey:intervalId];
                 }
                 found = YES;
             }
@@ -1022,12 +1046,101 @@ typedef NS_ENUM(NSInteger, PEMType) {
     return found;
 }
 
-- (BOOL)updatePollingMessage:(NSString *)intervalId data:(NSData *)data {
-    BOOL exists = NO;
+- (BOOL)updatePollingMessage:(NSString *)intervalId data:(NSData *)data firstDelayMs:(NSNumber * _Nullable)firstDelayMs {
+    __block BOOL exists = NO;
     @synchronized (self) {
-        if ([_pollingTimers objectForKey:intervalId] != nil) {
+        NSTimer *t = [_pollingTimers objectForKey:intervalId];
+        if (t != nil) {
             [_pollingData setObject:data forKey:intervalId];
             exists = YES;
+            if (firstDelayMs != nil) {
+                NSNumber *period = [_pollingPeriodsMs objectForKey:intervalId];
+                NSNumber *lastAt = [_lastSentAtMs objectForKey:intervalId];
+                if (period != nil && lastAt != nil) {
+                    double nowMs = CACurrentMediaTime() * 1000.0;
+                    double periodMs = period.doubleValue;
+                    
+                    // Calculate nextTick (when the normal timer would fire next)
+                    double nextTick = lastAt.doubleValue + periodMs;
+                    
+                    // Calculate target time
+                    double target = lastAt.doubleValue + MAX(0, firstDelayMs.doubleValue);
+                    
+                    // Apply the new logic
+                    BOOL shouldSend = NO;
+                    double delayMs = 0;
+                    
+                    if (target >= nextTick) {
+                        // Skip sending message - target is at or after next normal tick
+                        shouldSend = NO;
+                    } else if (target < nextTick) {
+                        if (target < nowMs) {
+                            // Target is in the past, add more firstDelayMs and validate again
+                            double additionalDelay = firstDelayMs.doubleValue;
+                            target = lastAt.doubleValue + additionalDelay;
+                            
+                            // Keep adding periods until target is in the future or >= nextTick
+                            while (target < nowMs && target < nextTick) {
+                                target += periodMs;
+                            }
+                            
+                            if (target < nextTick) {
+                                // Target is now in the future and before nextTick
+                                shouldSend = YES;
+                                delayMs = target - nowMs;
+                            } else {
+                                // Target is now >= nextTick, skip sending
+                                shouldSend = NO;
+                            }
+                        } else {
+                            // Target is in the future and before nextTick
+                            shouldSend = YES;
+                            delayMs = target - nowMs;
+                        }
+                    }
+                    
+                    if (shouldSend) {
+                        // Temporarily pause the normal timer to prevent it from firing before our one-shot
+                        [t setFireDate:[NSDate distantFuture]];
+                        
+                        dispatch_block_t existing = [_pendingOneShots objectForKey:intervalId];
+                        if (existing) {
+                            dispatch_block_cancel(existing);
+                        }
+                        dispatch_block_t block = dispatch_block_create(0, ^{
+                            NSData *current = nil;
+                            @synchronized (self) {
+                                current = [self->_pollingData objectForKey:intervalId];
+                            }
+                            if (current) {
+                                dispatch_async([self methodQueue], ^{
+                                    [self->_tcpSocket writeData:current withTimeout:-1 tag:0];
+                                    @synchronized (self) {
+                                        [self->_lastSentAtMs setObject:@(CACurrentMediaTime() * 1000.0) forKey:intervalId];
+                                    }
+                                    
+                                    // Resume the normal timer after the one-shot fires
+                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                        @synchronized (self) {
+                                            NSTimer *timer = [self->_pollingTimers objectForKey:intervalId];
+                                            if (timer != nil) {
+                                                NSNumber *periodMs = [self->_pollingPeriodsMs objectForKey:intervalId];
+                                                if (periodMs != nil) {
+                                                    // Resume timer with the original interval
+                                                    NSTimeInterval intervalInSeconds = periodMs.doubleValue / 1000.0;
+                                                    [timer setFireDate:[NSDate dateWithTimeIntervalSinceNow:intervalInSeconds]];
+                                                }
+                                            }
+                                        }
+                                    });
+                                });
+                            }
+                        });
+                        [_pendingOneShots setObject:block forKey:intervalId];
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayMs * NSEC_PER_MSEC)), dispatch_get_main_queue(), block);
+                    }
+                }
+            }
         }
     }
     return exists;

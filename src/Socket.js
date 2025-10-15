@@ -414,11 +414,11 @@ export default class Socket extends EventEmitter {
      * @param {(err?: Error) => void} [callback]
      * @returns {Promise<boolean>} Promise that resolves true if updated
      */
-    async updatePollingMessage(intervalId, data, encoding, callback) {
+    async updatePollingMessage(intervalId, data, firstDelayMs, encoding, callback) {
         try {
             const generatedBuffer = this._generateSendBuffer(data, encoding);
             const base64String = generatedBuffer.toString('base64');
-            const updated = await Sockets.updatePollingMessage(this._id, intervalId, base64String);
+            const updated = await Sockets.updatePollingMessage(this._id, intervalId, base64String, firstDelayMs ?? null);
             if (callback) callback();
             return updated;
         } catch (err) {

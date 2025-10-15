@@ -38,6 +38,9 @@ class TcpSocketClient extends TcpSocket {
     private final ScheduledExecutorService pollingExecutor = Executors.newScheduledThreadPool(15);
     private final ConcurrentHashMap<String, ScheduledFuture<?>> pollingIntervals = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicReference<byte[]>> pollingDataRefs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> pollingPeriodsMs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> lastSentAtMs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> pendingOneShots = new ConcurrentHashMap<>();
     private final AtomicInteger intervalIdCounter = new AtomicInteger(0);
 
     TcpSocketClient(TcpEventListener receiverListener, Integer id, Socket socket) {
@@ -206,6 +209,7 @@ class TcpSocketClient extends TcpSocket {
 
         final AtomicReference<byte[]> dataRef = new AtomicReference<>(data);
         pollingDataRefs.put(intervalId, dataRef);
+        pollingPeriodsMs.put(intervalId, intervalMs);
 
         ScheduledFuture<?> future = pollingExecutor.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -218,6 +222,7 @@ class TcpSocketClient extends TcpSocket {
                     byte[] currentData = dataRef.get();
                     if (currentData != null) {
                         socket.getOutputStream().write(currentData);
+                        lastSentAtMs.put(intervalId, System.currentTimeMillis());
                     }
                 } catch (IOException e) {
                     receiverListener.onError(getId(), e);
@@ -237,10 +242,76 @@ class TcpSocketClient extends TcpSocket {
      * @param newData    the new data to send on subsequent ticks
      * @return true if interval exists and data was updated
      */
-    public boolean updatePollingMessage(final String intervalId, final byte[] newData) {
+    public boolean updatePollingMessage(final String intervalId, final byte[] newData, final Integer firstDelayMs) {
         final AtomicReference<byte[]> ref = pollingDataRefs.get(intervalId);
         if (ref != null) {
             ref.set(newData);
+            if (firstDelayMs != null) {
+                // Apply the new logic: if target >= nextTick, skip; if target < nextTick and target < now, add more delay; if target < nextTick and target > now, send it
+                final Integer period = pollingPeriodsMs.get(intervalId);
+                final Long last = lastSentAtMs.get(intervalId);
+                if (period != null && last != null) {
+                    long now = System.currentTimeMillis();
+                    long periodMs = period;
+                    
+                    // Calculate nextTick (when the normal timer would fire next)
+                    long nextTick = last + periodMs;
+                    
+                    // Calculate target time
+                    long target = last + Math.max(0, firstDelayMs);
+                    
+                    // Apply the new logic
+                    boolean shouldSend = false;
+                    long delay = 0;
+                    
+                    if (target >= nextTick) {
+                        // Skip sending message - target is at or after next normal tick
+                        shouldSend = false;
+                    } else if (target < nextTick) {
+                        if (target < now) {
+                            // Target is in the past, add more firstDelayMs and validate again
+                            long additionalDelay = firstDelayMs;
+                            target = last + additionalDelay;
+                            
+                            // Keep adding periods until target is in the future or >= nextTick
+                            while (target < now && target < nextTick) {
+                                target += periodMs;
+                            }
+                            
+                            if (target < nextTick) {
+                                // Target is now in the future and before nextTick
+                                shouldSend = true;
+                                delay = target - now;
+                            } else {
+                                // Target is now >= nextTick, skip sending
+                                shouldSend = false;
+                            }
+                        } else {
+                            // Target is in the future and before nextTick
+                            shouldSend = true;
+                            delay = target - now;
+                        }
+                    }
+                    
+                    if (shouldSend) {
+                        ScheduledFuture<?> existing = pendingOneShots.remove(intervalId);
+                        if (existing != null) existing.cancel(false);
+                        ScheduledFuture<?> oneShot = pollingExecutor.schedule(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    byte[] current = ref.get();
+                                    if (socket != null && !socket.isClosed() && current != null) {
+                                        socket.getOutputStream().write(current);
+                                        lastSentAtMs.put(intervalId, System.currentTimeMillis());
+                                    }
+                                } catch (IOException ignored) { }
+                            }
+                        }, delay, TimeUnit.MILLISECONDS);
+                        pendingOneShots.put(intervalId, oneShot);
+                    }
+                }
+            }
             return true;
         }
         return false;
@@ -272,6 +343,9 @@ class TcpSocketClient extends TcpSocket {
             }
             pollingIntervals.clear();
             pollingDataRefs.clear();
+            pendingOneShots.clear();
+            pollingPeriodsMs.clear();
+            lastSentAtMs.clear();
             pollingExecutor.shutdown();
 
             // close the socket
